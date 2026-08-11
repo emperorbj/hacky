@@ -24,8 +24,22 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   profile             Profile?
+  reportsMade         Report[]             @relation("ReportsMade")
+  reportsReceived     Report[]             @relation("ReportsReceived")
 
   @@map("users")
+}
+
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+  reporter       User     @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId String
+  reportedUser   User     @relation("ReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reason         String
+  createdAt      DateTime @default(now())
+
+  @@map("reports")
 }
 
 model Profile {

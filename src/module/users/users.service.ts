@@ -1,7 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProfileModel } from '../../../generated/prisma/models.js';
 import { CloudinaryService } from '../../lib/cloudinary/cloudinary.service.js';
 import { PrismaService } from '../../lib/database/prisma.service.js';
+import { ReportUserDto } from './dto/report-user.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 
 const COMPLETION_FIELDS = 8;
@@ -90,6 +95,51 @@ export class UsersService {
       ...profile,
       completionPercentage: this.calculateCompletion(profile),
     };
+  }
+
+  async getPublicProfile(userId: string) {
+    const profile = await this.prisma.profile.findUnique({
+      where: { userId },
+      select: {
+        bio: true,
+        location: true,
+        skills: true,
+        yearsOfExperience: true,
+        education: true,
+        portfolioLinks: true,
+        photoUrl: true,
+        user: { select: { id: true, role: true, createdAt: true } },
+      },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('User not found');
+    }
+
+    return profile;
+  }
+
+  async reportUser(
+    reporterId: string,
+    reportedUserId: string,
+    dto: ReportUserDto,
+  ) {
+    if (reporterId === reportedUserId) {
+      throw new BadRequestException('You cannot report yourself');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: reportedUserId },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.report.create({
+      data: { reporterId, reportedUserId, reason: dto.reason },
+    });
+
+    return { message: 'Report submitted' };
   }
 
   private calculateCompletion(profile: ProfileModel): number {

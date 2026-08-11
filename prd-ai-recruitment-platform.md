@@ -98,8 +98,7 @@ Every transition writes an `ApplicationStatusHistory` row (actor, from-status, t
 - CRUD on profile: name, bio, location, skills, experience, education, portfolio links, resume upload, profile picture.
 - Server-computed **profile completion percentage**.
 - Public profile view (subset of fields).
-- Follow/connect other users.
-- Block / report a user.
+- Report a user (feeds Admin moderation queue — see §3, §5.10). ~~Follow/connect other users~~ and ~~block a user~~ — **cut from v1**: neither has a consuming feature in this PRD (no feed/activity stream for follow to power, no discovery filtering built for block); revisit only if a feed or messaging feature is added later.
 
 **File uploads (resume + profile picture):**
 - Storage: **Cloudinary** (no local disk storage; upload buffer is streamed to Cloudinary, only the returned secure URL + public ID are persisted in Neon).
@@ -188,7 +187,6 @@ POST   /auth/password-reset/confirm
 GET    /users/me
 PATCH  /users/me
 GET    /users/:id            (public profile)
-POST   /users/:id/follow
 POST   /users/:id/report
 
 POST   /companies
@@ -366,7 +364,7 @@ Redis caching · BullMQ workers · notifications · audit logs · rate limiting 
 Deterministic job↔candidate matching · AI candidate ranking · AI job description generator · AI match/application explanations.
 
 **Phase 4 — Backlog / v2**
-AI resume parsing (resume → structured profile) · pgvector-based semantic matching · real-time recruiter↔candidate messaging · advanced analytics · full observability/metrics.
+AI resume parsing (resume → structured profile) · pgvector-based semantic matching · real-time recruiter↔candidate messaging · advanced analytics · full observability/metrics · follow/connect between users and user-blocking (cut from v1 — see §5.2; only worth revisiting alongside a feed or messaging feature).
 
 **Phase 5 — Monetization (Points & Badges)**
 Point packages · Stripe integration (non-Nigeria) · Paystack integration (Nigeria) · webhook-based point crediting · badge tier computation. Test/sandbox mode only. Only depends on Auth + Users, so it can be built any time after Phase 1 — doesn't need to wait for Jobs/Applications.
