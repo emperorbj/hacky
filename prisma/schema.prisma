@@ -14,6 +14,58 @@ enum Role {
   ADMIN
 }
 
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  CLOSED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum WorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum ExperienceLevel {
+  ENTRY
+  MID
+  SENIOR
+  LEAD
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum NotificationType {
+  JOB_PUBLISHED
+  APPLICATION_STATUS_CHANGED
+}
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id                  String               @id @default(cuid())
   email               String               @unique
@@ -26,8 +78,114 @@ model User {
   profile             Profile?
   reportsMade         Report[]             @relation("ReportsMade")
   reportsReceived     Report[]             @relation("ReportsReceived")
+  company             Company?
+  applications        Application[]
+  statusChangesActed  ApplicationStatusHistory[]
+  notifications       Notification[]
+  pointsTransactions  PointsTransaction[]
 
   @@map("users")
+}
+
+model PointsTransaction {
+  id                String          @id @default(cuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          PaymentProvider
+  providerReference String          @unique
+  packageId         String
+  points            Int
+  amount            Int
+  currency          String
+  status            PaymentStatus   @default(PENDING)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@map("points_transactions")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  website      String?
+  industry     String?
+  size         String?
+  location     String?
+  logoUrl      String?
+  logoPublicId String?
+  recruiterId  String   @unique
+  recruiter    User     @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  jobs         Job[]
+
+  @@map("companies")
+}
+
+model Job {
+  id                  String           @id @default(cuid())
+  title               String
+  description         String
+  companyId           String
+  company             Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  location            String?
+  employmentType      EmploymentType
+  workMode            WorkMode
+  salaryRangeMin      Int?
+  salaryRangeMax      Int?
+  experienceLevel     ExperienceLevel
+  skills              String[]
+  applicationDeadline DateTime?
+  status              JobStatus        @default(DRAFT)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  applications        Application[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id                   String                     @id @default(cuid())
+  candidateId          String
+  candidate            User                       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId                String
+  job                  Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status               ApplicationStatus          @default(APPLIED)
+  interviewMeetingLink String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  statusHistory        ApplicationStatusHistory[]
+
+  @@unique([candidateId, jobId])
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String             @id @default(cuid())
+  applicationId String
+  application   Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorId       String
+  actor         User               @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  createdAt     DateTime           @default(now())
+
+  @@map("application_status_history")
 }
 
 model Report {

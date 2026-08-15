@@ -4,7 +4,7 @@
 **Version:** 1.0
 **Owner:** [Your Name]
 **Status:** Draft — Ready for Engineering
-**Stack:** NestJS · Prisma · Neon (PostgreSQL) · Redis · BullMQ · LLM API (no RAG) · Cloudinary (file storage) · Stripe & Paystack (payments, test/sandbox mode) · Swagger · Docker · Render (free tier)
+**Stack:** NestJS · Prisma · Neon (PostgreSQL) · Redis · BullMQ · LLM API (no RAG) · Cloudinary (file storage) · Stripe (payments, test/sandbox mode) · Swagger · Docker · Render (free tier)
 
 ---
 
@@ -14,7 +14,7 @@ An AI-powered recruitment platform that helps recruiters discover and evaluate c
 
 **Core loop:** Recruiter posts a job → AI extracts structured requirements → candidates are filtered and deterministically scored → AI explains the score → recruiter reviews and moves candidates through a hiring pipeline.
 
-**Explicitly out of scope for v1:** RAG, vector database as a hard dependency, GPU/self-hosted LLM, always-on AI worker process, email verification, live/production payment processing (Stripe and Paystack run in test/sandbox mode only for v1).
+**Explicitly out of scope for v1:** RAG, vector database as a hard dependency, GPU/self-hosted LLM, always-on AI worker process, email verification, live/production payment processing (Stripe runs in test/sandbox mode only for v1), Paystack/any second payment provider.
 
 ---
 
@@ -107,7 +107,8 @@ Every transition writes an `ApplicationStatusHistory` row (actor, from-status, t
 - Validation (mimetype + size) happens in a Nest `ParseFilePipe`/custom pipe **before** the buffer is sent to Cloudinary — never trust the client-provided `Content-Type` alone; sniff magic bytes.
 
 ### 5.3 Company & Recruiter
-- Recruiter creates/edits a company profile.
+- Recruiter creates/edits a company profile — **one company per recruiter account** (see §13 open question #3).
+- Only the owning recruiter (or Admin) may edit a company — enforced at the service layer, not just via role (§3's hard authorization rules).
 - Company profile is publicly viewable.
 
 ### 5.4 Job Management
@@ -151,18 +152,18 @@ Track at minimum: `USER_CREATED, JOB_CREATED, JOB_PUBLISHED, APPLICATION_SUBMITT
 
 ### 5.12 Points & Badges (Gamification)
 - Any authenticated user (either role) can purchase **point packages** with real money. Points are cumulative and **never spent** — they exist purely to determine a **badge tier** displayed on the user's profile (a status/reputation signal, not a currency redeemable for anything else in v1).
-- **Payment provider is user-selected at checkout, not auto-detected by IP/geo** (v1 simplification — see §13 open questions): **Stripe** for users outside Nigeria, **Paystack** for users within Nigeria.
-- **Test/sandbox mode only for v1** — no live payment credentials, no real money moves. Stripe test secret keys (`sk_test_...`) and Paystack test secret keys, plus each provider's published test card numbers, are used throughout.
-- A `PointsTransaction` ledger row is created (`status: PENDING`) the moment checkout is initiated. Points are only credited — `status: COMPLETED` — once the provider's **webhook** confirms the payment server-to-server. The client's post-checkout redirect is a UX convenience only and is never trusted to grant points (same "never trust the client" principle already applied to AI processing in §7).
+- **Stripe only for v1.** The original plan to also support Paystack (for Nigeria-based users) was cut deliberately to keep the payments surface to one provider/one integration for v1 — same "don't build it until it's needed" philosophy used elsewhere in this PRD. Paystack can be added later as a second `PaymentProvider` if there's real demand; the schema's `PaymentProvider` enum is already shaped to allow that without a redesign.
+- **Test/sandbox mode only for v1** — no live payment credentials, no real money moves. Stripe test secret keys (`sk_test_...`) and Stripe's published test card numbers are used throughout.
+- A `PointsTransaction` ledger row is created (`status: PENDING`) the moment checkout is initiated. Points are only credited — `status: COMPLETED` — once Stripe's **webhook** confirms the payment server-to-server. The client's post-checkout redirect is a UX convenience only and is never trusted to grant points (same "never trust the client" principle already applied to AI processing in §7).
 - Badge tier is **server-computed** from `SUM(points) WHERE status = 'COMPLETED'` for that user, the same "derive, don't store" approach already used for profile completion % (§5.2) — there is no separate mutable `badge` field to fall out of sync.
 
 #### Point Packages (v1 pricing — illustrative, easy to retune later)
-| Package | Points | Stripe (USD) | Paystack (NGN) |
-|---|---|---|---|
-| Starter Pack | 100 | $5 | ₦4,000 |
-| Growth Pack | 500 | $20 | ₦15,000 |
-| Pro Pack | 1,500 | $50 | ₦35,000 |
-| Elite Pack | 5,000 | $150 | ₦100,000 |
+| Package | Points | Price (USD) |
+|---|---|---|
+| Starter Pack | 100 | $5 |
+| Growth Pack | 500 | $20 |
+| Pro Pack | 1,500 | $50 |
+| Elite Pack | 5,000 | $150 |
 
 #### Badge Tiers (4 levels, cumulative lifetime points)
 | Badge | Points Required |
@@ -214,11 +215,10 @@ GET    /analytics/recruiter
 GET    /analytics/admin
 
 GET    /points/packages
-POST   /points/checkout            (body: packageId, provider — returns a hosted checkout URL)
+POST   /points/checkout            (body: packageId — returns a Stripe hosted checkout URL)
 GET    /points/me                  (balance, badge tier, transaction history)
-GET    /points/transactions/:reference   (poll a single transaction's status post-redirect; triggers active reconciliation with the provider if still PENDING)
+GET    /points/transactions/:reference   (poll a single transaction's status post-redirect; triggers active reconciliation with Stripe if still PENDING)
 POST   /payments/stripe/webhook
-POST   /payments/paystack/webhook
 
 GET    /health
 ```
@@ -319,7 +319,7 @@ Invalidate on: job created, updated, deleted, published, unpublished.
 ## 10. Non-Functional Requirements
 
 - **Security:** JWT auth, refresh token rotation, bcrypt/argon2 password hashing, RBAC, resource-ownership checks on every mutating endpoint, request validation (class-validator DTOs), rate limiting, CORS, Helmet, input sanitization, file upload type/size validation.
-- **Payments:** raw card data never touches our server — both Stripe and Paystack are used via their hosted checkout pages, so we only ever handle provider-generated references. Every webhook endpoint verifies the provider's signature before trusting the payload (Stripe: `stripe-signature` header + webhook secret; Paystack: `x-paystack-signature` header, HMAC SHA512). Points are credited exactly once per transaction (idempotency key = provider's event/transaction ID) to survive webhook retries.
+- **Payments:** raw card data never touches our server — Stripe's hosted Checkout page is used, so we only ever handle Stripe-generated references. The webhook endpoint verifies Stripe's signature (`stripe-signature` header + webhook secret) before trusting the payload. Points are credited exactly once per transaction (idempotency key = Stripe's event ID) to survive webhook retries.
 - **Observability:** structured logging, request IDs, centralized error handling, `GET /health` returning DB/Redis/queue status.
 - **API docs:** Swagger/OpenAPI exposed at `/api/docs`.
 - **Testing:** unit tests for `AuthService`, `JobService`, `ApplicationService`, `MatchingService`; integration tests for create-job / apply-to-job / change-status / AI matching; one E2E test covering register → create profile → post job → search → apply → shortlist → notification.
@@ -346,7 +346,7 @@ src/
 ├── analytics/
 ├── audit/
 ├── points/            ← packages, balance, badge-tier computation (business logic, no provider SDKs)
-├── payments/          ← Stripe/Paystack SDK wrappers, checkout session creation, webhook handlers
+├── payments/          ← Stripe SDK wrapper, checkout session creation, webhook handler
 └── common/
 ```
 
@@ -367,7 +367,7 @@ Deterministic job↔candidate matching · AI candidate ranking · AI job descrip
 AI resume parsing (resume → structured profile) · pgvector-based semantic matching · real-time recruiter↔candidate messaging · advanced analytics · full observability/metrics · follow/connect between users and user-blocking (cut from v1 — see §5.2; only worth revisiting alongside a feed or messaging feature).
 
 **Phase 5 — Monetization (Points & Badges)**
-Point packages · Stripe integration (non-Nigeria) · Paystack integration (Nigeria) · webhook-based point crediting · badge tier computation. Test/sandbox mode only. Only depends on Auth + Users, so it can be built any time after Phase 1 — doesn't need to wait for Jobs/Applications.
+Point packages · Stripe integration · webhook-based point crediting · badge tier computation. Test/sandbox mode only. Only depends on Auth + Users, so it can be built any time after Phase 1 — doesn't need to wait for Jobs/Applications.
 
 ---
 
@@ -375,8 +375,8 @@ Point packages · Stripe integration (non-Nigeria) · Paystack integration (Nige
 
 1. Which LLM provider/model, and what are the cost/rate-limit constraints on Render free tier?
 2. ~~Resume upload: accept PDF only, or also DOCX? What's the max file size?~~ **Resolved:** PDF only, max 5 MB. Profile picture also max 5 MB. Both stored in Cloudinary (see §5.2).
-3. Do we need multi-company support per recruiter, or one company per recruiter account for v1?
+3. ~~Do we need multi-company support per recruiter, or one company per recruiter account for v1?~~ **Resolved:** one company per recruiter (1:1). A recruiter registers, creates exactly one company profile, and every job they post belongs to it — no company-context switching anywhere else in the API.
 4. Confirm password-reset delivery channel (email) still needs a transactional email provider even though verification is removed — same provider can likely serve both password reset and status-change notifications.
-5. Payment provider selection: v1 assumes the user manually picks "Pay with Stripe" vs "Pay with Paystack" at checkout (no IP/geo auto-detection). Confirm that's acceptable, or whether geo-detection should be added later.
+5. ~~Payment provider selection: v1 assumes the user manually picks "Pay with Stripe" vs "Pay with Paystack" at checkout (no IP/geo auto-detection). Confirm that's acceptable, or whether geo-detection should be added later.~~ **Resolved:** moot — Paystack was cut from v1 scope entirely (§5.12). Stripe only, no provider selection needed.
 6. Points are modeled as purely cumulative (never decremented/spent) in v1 — confirm there's no near-term plan to make points a spendable currency (e.g. unlocking features), since that would change the data model (ledger would need debit rows, not just credits).
 7. Webhook reliability: what's the fallback if a webhook never arrives (payment succeeds provider-side but the webhook is lost/delayed)? v1 minimum: a scheduled job that reconciles `PENDING` transactions older than N minutes against the provider's API directly.

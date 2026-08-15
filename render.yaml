@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: hacky-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    preDeployCommand: npx prisma migrate deploy && npm run seed
+    startCommand: npm run start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22.21.0
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_TOKEN_EXPIRES_IN_DAYS
+        value: "7"
+      - key: PASSWORD_RESET_EXPIRES_IN_MINUTES
+        value: "30"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: ARCJET_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: DEFAULT_RECRUITER_EMAIL
+        sync: false
+      - key: DEFAULT_RECRUITER_PASSWORD
+        sync: false
