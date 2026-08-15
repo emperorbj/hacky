@@ -1,4 +1,4 @@
-# AI-Powered Recruitment Platform (Backend)
+# Recruitment Platform (Backend)
 
 A NestJS backend for a job marketplace: recruiters post and publish jobs, candidates apply, applications move through a real hiring pipeline with a full audit trail, and both sides get live updates over Server-Sent Events. AI is deliberately *not* used to make hiring decisions — see the [PRD](./prd-ai-recruitment-platform.md) for the reasoning.
 
