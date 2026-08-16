@@ -42,6 +42,13 @@ export class JobsController {
     return this.jobsService.findMany(query);
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.RECRUITER)
+  findMine(@CurrentUser() user: JwtPayload) {
+    return this.jobsService.findMine(user.sub);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.jobsService.findOne(id);

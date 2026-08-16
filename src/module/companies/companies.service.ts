@@ -35,6 +35,16 @@ export class CompaniesService {
     return company;
   }
 
+  async findMine(recruiterId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { recruiterId },
+    });
+    if (!company) {
+      throw new NotFoundException('You do not have a company profile yet');
+    }
+    return company;
+  }
+
   async update(id: string, requester: JwtPayload, dto: UpdateCompanyDto) {
     const company = await this.findOne(id);
 

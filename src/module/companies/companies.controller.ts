@@ -39,6 +39,13 @@ export class CompaniesController {
     return this.companiesService.update(id, user, dto);
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.RECRUITER)
+  findMine(@CurrentUser() user: JwtPayload) {
+    return this.companiesService.findMine(user.sub);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.companiesService.findOne(id);

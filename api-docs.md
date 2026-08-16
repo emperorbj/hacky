@@ -409,6 +409,15 @@ Errors: `404`.
 
 ---
 
+### `GET /companies/me`
+**Auth required, `RECRUITER` role only.** Returns the caller's own company — no ID needed. This is how a recruiter's frontend finds its own company profile after login.
+
+Response `200`: full company object (same shape as create's response).
+
+Errors: `403` — not a recruiter. `404` — this recruiter hasn't created a company yet.
+
+---
+
 ## Jobs
 
 ### `POST /jobs`
@@ -484,6 +493,15 @@ Cached for 60 seconds server-side (Redis) — a change may take up to a minute t
 Response `200`: single job object.
 
 Errors: `404`.
+
+---
+
+### `GET /jobs/me`
+**Auth required, `RECRUITER` role only.** Returns every job posted by the caller's own company, **regardless of status** — including `DRAFT` and `UNPUBLISHED` jobs, which `GET /jobs` (public search) never returns. This is how a recruiter's dashboard lists all of its own postings, drafts included.
+
+Response `200`: array of job objects (same shape as create's response), newest first. Returns `[]` if the recruiter has no company yet — this is not an error.
+
+Errors: `403` — not a recruiter.
 
 ---
 

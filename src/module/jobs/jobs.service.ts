@@ -96,6 +96,20 @@ export class JobsService {
     );
   }
 
+  async findMine(recruiterId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { recruiterId },
+    });
+    if (!company) {
+      return [];
+    }
+
+    return this.prisma.job.findMany({
+      where: { companyId: company.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findOne(id: string) {
     const job = await this.redisService.getOrSet(
       `jobs:detail:${id}`,
